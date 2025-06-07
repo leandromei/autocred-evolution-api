@@ -1,22 +1,19 @@
 {
-  "name": "autocred-evolution-api-real",
-  "version": "2.0.0",
-  "description": "Evolution API Real para AutoCred - WhatsApp funcional",
+  "name": "autocred-evolution-api-light",
+  "version": "2.1.0",
+  "description": "Evolution API Light para AutoCred - WhatsApp via webhook",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js"
   },
-  "engines": {
-    "node": "18.x"
-  },
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "qrcode": "^1.5.3",
-    "@whiskeysockets/baileys": "^6.6.0",
-    "pino": "^8.19.0",
-    "qrcode-terminal": "^0.12.0",
-    "uuid": "^9.0.1"
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 } 
