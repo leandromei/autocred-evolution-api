@@ -1,0 +1,38 @@
+FROM node:18-alpine
+
+# Instalar dependências do sistema
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    git \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/cache/apk/*
+
+# Definir variáveis de ambiente para Chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Criar diretório da aplicação
+WORKDIR /app
+
+# Clonar Evolution API
+RUN git clone https://github.com/EvolutionAPI/evolution-api.git .
+
+# Instalar dependências
+RUN npm install
+
+# Configuração padrão
+COPY evolution-config.yml ./src/config/config.yml
+
+# Expor porta
+EXPOSE 8080
+
+# Comando de inicialização
+CMD ["npm", "run", "start:prod"] 

@@ -1,0 +1,103 @@
+# EVOLUTION API - CONFIGURAÇÃO RAILWAY
+# AutoCred Evolution API Própria
+
+# Configurações do Servidor
+server:
+  type: http
+  port: 8080
+  url: ${RAILWAY_STATIC_URL}
+  
+# Configurações de CORS
+cors:
+  origin:
+    - '*'
+  methods:
+    - POST
+    - GET
+    - PUT
+    - DELETE
+  credentials: true
+
+# Configurações SSL/HTTPS (Railway cuida disso)
+httpsOptions:
+  rejectUnauthorized: false
+
+# Log level
+log:
+  level: ERROR
+  color: true
+  baileys: error
+
+# Database (Railway PostgreSQL)
+database:
+  connection:
+    uri: ${DATABASE_URL}
+  enabled: true
+  sync: true
+
+# Redis (Railway Redis)
+redis:
+  enabled: true
+  uri: ${REDIS_URL}
+
+# Storage - S3 compatible (Cloudflare R2)
+s3:
+  enabled: false
+
+# Configurações de Autenticação
+authentication:
+  type: jwt
+  secret: ${JWT_SECRET}
+  expireIn: 3600
+  ignoreJwtExpiration: false
+
+# API Key global
+apikey:
+  key: ${EVOLUTION_API_KEY}
+
+# Configurações do WhatsApp
+qrcode:
+  limit: 10
+  color: '#198754'
+
+# Configurações de instância
+instance:
+  name: autocred-evolution
+  qrcode: true
+  number: true
+  token: ${INSTANCE_TOKEN}
+
+# Webhook configurações
+webhook:
+  enabled: true
+  url: ${WEBHOOK_URL}
+  events:
+    - MESSAGE_RECEIVED
+    - MESSAGE_SEND
+    - QRCODE_UPDATED
+    - CONNECTION_UPDATE
+
+# WhatsApp Business configurações
+integration:
+  WHATSAPP_BUSINESS:
+    enabled: false
+
+# Configurações de sessão
+session:
+  save_data_instance: true
+  merge_brazil_contacts: true
+  
+# Typebot integration
+typebot:
+  enabled: false
+
+# OpenAI integration
+openai:
+  enabled: false
+
+# Configurações de produção
+production:
+  enabled: true
+  ignore_group_messages: false
+  ignore_broadcast_statuses: true
+  ignore_own_messages: true 
