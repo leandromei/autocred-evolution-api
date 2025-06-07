@@ -3,10 +3,9 @@ builder = "dockerfile"
 dockerfilePath = "Dockerfile.evolution"
 
 [deploy]
-healthcheckPath = "/manager/health"
-healthcheckTimeout = 300
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+healthcheckPath = "/manager/fetchInstances"
+healthcheckTimeout = 60
+restartPolicyType = "on-failure"
 
 [[services]]
 name = "evolution-api"
