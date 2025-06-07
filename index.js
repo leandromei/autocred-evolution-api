@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const QRCode = require('qrcode');
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const pino = require('pino');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs-extra');
 const path = require('path');
@@ -19,21 +18,15 @@ console.log(`📱 WhatsApp Version: ${process.env.CONFIG_SESSION_PHONE_VERSION}`
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logger configurado
-const logger = pino({ 
-  level: process.env.LOG_LEVEL || 'info',
-  transport: {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      translateTime: true,
-      ignore: 'pid,hostname'
-    }
-  }
-});
+// Logger simples (removendo Pino temporariamente para facilitar build)
+const logger = {
+  info: (...args) => console.log('[INFO]', new Date().toISOString(), ...args),
+  warn: (...args) => console.warn('[WARN]', new Date().toISOString(), ...args),
+  error: (...args) => console.error('[ERROR]', new Date().toISOString(), ...args)
+};
 
 // Cache para QR codes e instâncias
 const cache = new NodeCache({ stdTTL: 300 }); // 5 minutos
@@ -180,7 +173,7 @@ async function connectWhatsApp(instanceName) {
     // Criar socket WhatsApp
     const sock = makeWASocket({
       version,
-      logger: pino({ level: 'silent' }),
+      logger: { level: 'silent' },
       printQRInTerminal: false,
       auth: state,
       browser: ['AutoCred Evolution', 'Chrome', '110.0.5481'],
