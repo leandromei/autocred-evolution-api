@@ -21,6 +21,46 @@ app.get('/', (req, res) => {
   });
 });
 
+// Página de informações WhatsApp
+app.get('/whatsapp', (req, res) => {
+  res.json({
+    title: '📱 AutoCred WhatsApp API',
+    status: 'online',
+    version: '2.0.0',
+    description: 'Sistema completo de mensagens WhatsApp para AutoCred',
+    features: [
+      '✅ Criação de instâncias WhatsApp',
+      '✅ Envio de mensagens',
+      '✅ Geração de QR Code',
+      '✅ Webhooks para receber mensagens',
+      '✅ Dashboard de estatísticas'
+    ],
+    endpoints: {
+      'GET /': 'Status da API',
+      'GET /whatsapp': 'Informações WhatsApp (esta página)',
+      'GET /manager/fetchInstances': 'Listar instâncias',
+      'POST /instance/create': 'Criar instância',
+      'GET /instance/qrcode/:name': 'Gerar QR Code',
+      'GET /instance/status/:name': 'Status da instância',
+      'POST /message/sendText/:name': 'Enviar mensagem',
+      'GET /messages/:name': 'Listar mensagens',
+      'GET /health': 'Health check'
+    },
+    statistics: {
+      uptime: `${Math.floor(process.uptime())} segundos`,
+      instances: instances.length,
+      messages: messages.length,
+      memory_usage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`
+    },
+    integration: {
+      autocred_app: 'Integrado com sistema AutoCred',
+      webhook_url: '/webhook/:instanceName',
+      supported_formats: ['text', 'image', 'document']
+    },
+    last_updated: new Date().toISOString()
+  });
+});
+
 app.get('/manager/fetchInstances', (req, res) => {
   res.json(instances);
 });
@@ -142,7 +182,7 @@ app.get('/health', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 AutoCred Evolution API rodando na porta ${PORT}`);
+  console.log(`�� AutoCred Evolution API rodando na porta ${PORT}`);
   console.log(`📱 WhatsApp API simulado funcionando!`);
   console.log(`🔗 Endpoints disponíveis:`);
   console.log(`   GET  /                               - Status da API`);
