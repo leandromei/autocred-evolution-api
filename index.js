@@ -1,117 +1,223 @@
 const express = require('express');
 const cors = require('cors');
 const QRCode = require('qrcode');
+const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+
+// ✅ CONFIGURAÇÃO CRUCIAL - Versão do WhatsApp
+process.env.CONFIG_SESSION_PHONE_VERSION = '2.3000.1023204200';
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Simular banco de dados em memória
-let instances = [];
-let messages = [];
+// Logger
+const logger = pino({ level: 'info' });
 
-// Routes básicos Evolution API
+// Armazenamento de instâncias
+const instances = new Map();
+const qrCodes = new Map();
+
+// Garantir diretório de sessões (para ambiente sem filesystem persistente)
+const sessionsDir = '/tmp/sessions';
+if (!fs.existsSync(sessionsDir)) {
+  fs.mkdirSync(sessionsDir, { recursive: true });
+}
+
+// Status da API
 app.get('/', (req, res) => {
-  res.json({ 
-    message: 'AutoCred Evolution API', 
-    status: 'online',
-    version: '2.0.0'
-  });
-});
-
-// Página de informações WhatsApp
-app.get('/whatsapp', (req, res) => {
   res.json({
-    title: '📱 AutoCred WhatsApp API',
+    message: '🚀 AutoCred Evolution API REAL',
     status: 'online',
     version: '2.0.0',
-    description: 'Sistema completo de mensagens WhatsApp para AutoCred',
-    features: [
-      '✅ Criação de instâncias WhatsApp',
-      '✅ Envio de mensagens',
-      '✅ Geração de QR Code REAL',
-      '✅ Webhooks para receber mensagens',
-      '✅ Dashboard de estatísticas'
-    ],
-    endpoints: {
-      'GET /': 'Status da API',
-      'GET /whatsapp': 'Informações WhatsApp (esta página)',
-      'GET /manager/fetchInstances': 'Listar instâncias',
-      'POST /instance/create': 'Criar instância',
-      'GET /instance/qrcode/:name': 'Gerar QR Code REAL',
-      'GET /instance/status/:name': 'Status da instância',
-      'POST /message/sendText/:name': 'Enviar mensagem',
-      'GET /messages/:name': 'Listar mensagens',
-      'GET /health': 'Health check'
-    },
-    statistics: {
-      uptime: `${Math.floor(process.uptime())} segundos`,
-      instances: instances.length,
-      messages: messages.length,
-      memory_usage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`
-    },
-    integration: {
-      autocred_app: 'Integrado com sistema AutoCred',
-      webhook_url: '/webhook/:instanceName',
-      supported_formats: ['text', 'image', 'document']
-    },
-    last_updated: new Date().toISOString()
+    whatsapp_version: process.env.CONFIG_SESSION_PHONE_VERSION,
+    instances: instances.size,
+    uptime: Math.floor(process.uptime()),
+    type: 'real_evolution_api'
   });
 });
 
-app.get('/manager/fetchInstances', (req, res) => {
-  res.json(instances);
-});
-
-// Criar instância WhatsApp
-app.post('/instance/create', (req, res) => {
-  const { instanceName } = req.body;
-  const instance = {
-    instanceName: instanceName || 'autocred-instance',
-    status: 'created',
-    connectionStatus: 'disconnected',
-    qrcode: null,
-    created_at: new Date().toISOString()
-  };
-  
-  instances.push(instance);
-  
+// Health check
+app.get('/health', (req, res) => {
   res.json({
-    instance: instance
+    status: 'healthy',
+    instances: instances.size,
+    uptime: process.uptime()
   });
 });
 
-// Gerar QR Code REAL do WhatsApp
-app.get('/instance/qrcode/:instanceName', async (req, res) => {
-  const { instanceName } = req.params;
+// Listar instâncias
+app.get('/manager/fetchInstances', (req, res) => {
+  const instanceList = Array.from(instances.keys()).map(name => ({
+    instanceName: name,
+    status: instances.get(name)?.status || 'disconnected',
+    connectionStatus: instances.get(name)?.connectionStatus || 'close',
+    created_at: instances.get(name)?.created_at || new Date().toISOString()
+  }));
   
+  res.json(instanceList);
+});
+
+// Criar instância
+app.post('/instance/create', async (req, res) => {
   try {
-    // Gerar dados únicos para o QR Code (simulando protocolo WhatsApp Web)
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(7);
-    const sessionId = `autocred_${instanceName}_${timestamp}_${randomId}`;
+    const { instanceName } = req.body;
     
-    // Dados reais para WhatsApp Web (formato similar ao real)
-    const whatsappData = {
-      ref: sessionId,
-      ttl: 20000, // 20 seconds like real WhatsApp
-      type: 'primary',
-      clientToken: `autocred_token_${randomId}`,
-      serverToken: `server_token_${timestamp}`,
-      privateKey: `private_key_${sessionId}`,
-      publicKey: `public_key_${sessionId}`,
-      browserDescription: ['AutoCred', 'Chrome', '91.0'],
-      timestamp: timestamp
+    if (!instanceName) {
+      return res.status(400).json({ error: 'instanceName é obrigatório' });
+    }
+    
+    if (instances.has(instanceName)) {
+      return res.json({
+        instance: {
+          instanceName,
+          status: 'already_exists'
+        }
+      });
+    }
+    
+    // Criar instância
+    const instance = {
+      instanceName,
+      status: 'created',
+      connectionStatus: 'close',
+      sock: null,
+      qr: null,
+      created_at: new Date().toISOString()
     };
     
-    // Criar string JSON real para o QR Code
-    const qrData = JSON.stringify(whatsappData);
+    instances.set(instanceName, instance);
     
-    // Gerar QR Code real usando a biblioteca qrcode
-    const qrCodeDataURL = await QRCode.toDataURL(qrData, {
+    logger.info(`✅ Instância criada: ${instanceName}`);
+    
+    res.json({
+      instance: {
+        instanceName,
+        status: 'created'
+      }
+    });
+    
+  } catch (error) {
+    logger.error('❌ Erro ao criar instância:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Conectar instância WhatsApp
+async function connectWhatsApp(instanceName) {
+  try {
+    const sessionPath = path.join(sessionsDir, instanceName);
+    
+    // Criar diretório da sessão se não existir
+    if (!fs.existsSync(sessionPath)) {
+      fs.mkdirSync(sessionPath, { recursive: true });
+    }
+    
+    // Usar auth state para sessão persistente
+    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+    
+    // Versão mais recente do Baileys
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    logger.info(`📱 Usando WA v${version.join('.')}, É a mais recente: ${isLatest}`);
+    
+    // Criar socket WhatsApp
+    const sock = makeWASocket({
+      version,
+      logger: pino({ level: 'silent' }), // Silent para reduzir logs
+      printQRInTerminal: false,
+      auth: state,
+      browser: ['AutoCred', 'Chrome', '91.0.4472'],
+      markOnlineOnConnect: false,
+    });
+    
+    // Atualizar instância
+    const instance = instances.get(instanceName);
+    instance.sock = sock;
+    instance.status = 'connecting';
+    
+    // Event: Connection update
+    sock.ev.on('connection.update', (update) => {
+      const { connection, lastDisconnect, qr } = update;
+      
+      if (qr) {
+        logger.info(`📱 QR Code REAL gerado para ${instanceName}`);
+        instance.qr = qr;
+        qrCodes.set(instanceName, qr);
+      }
+      
+      if (connection === 'close') {
+        const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+        logger.info(`🔌 Conexão fechada para ${instanceName}, reconectar: ${shouldReconnect}`);
+        
+        instance.status = 'disconnected';
+        instance.connectionStatus = 'close';
+        
+        if (shouldReconnect) {
+          setTimeout(() => connectWhatsApp(instanceName), 5000);
+        }
+      } else if (connection === 'open') {
+        logger.info(`✅ WhatsApp conectado para ${instanceName}!`);
+        instance.status = 'connected';
+        instance.connectionStatus = 'open';
+        instance.qr = null;
+        qrCodes.delete(instanceName);
+      }
+    });
+    
+    // Event: Salvar credenciais
+    sock.ev.on('creds.update', saveCreds);
+    
+    return sock;
+    
+  } catch (error) {
+    logger.error(`❌ Erro ao conectar ${instanceName}:`, error);
+    throw error;
+  }
+}
+
+// Gerar QR Code REAL
+app.get('/instance/qrcode/:instanceName', async (req, res) => {
+  try {
+    const { instanceName } = req.params;
+    
+    if (!instances.has(instanceName)) {
+      return res.status(404).json({ error: 'Instância não encontrada' });
+    }
+    
+    const instance = instances.get(instanceName);
+    
+    // Se não está conectando, iniciar conexão
+    if (!instance.sock) {
+      logger.info(`🔄 Iniciando conexão WhatsApp para ${instanceName}`);
+      await connectWhatsApp(instanceName);
+    }
+    
+    // Aguardar QR Code ser gerado (timeout 30s)
+    let attempts = 0;
+    const maxAttempts = 30;
+    
+    while (!qrCodes.has(instanceName) && attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+    }
+    
+    const qrData = qrCodes.get(instanceName);
+    
+    if (!qrData) {
+      return res.status(408).json({ 
+        error: 'QR Code não gerado no tempo esperado',
+        suggestion: 'Tente novamente em alguns segundos'
+      });
+    }
+    
+    // Gerar QR Code como imagem PNG
+    const qrCodeImage = await QRCode.toDataURL(qrData, {
       type: 'image/png',
       quality: 0.92,
       margin: 1,
@@ -122,133 +228,128 @@ app.get('/instance/qrcode/:instanceName', async (req, res) => {
       width: 256
     });
     
-    // Simular timeout do QR Code (como WhatsApp real)
-    setTimeout(() => {
-      console.log(`⏰ QR Code expirado para ${instanceName}`);
-    }, 20000);
-    
-    console.log(`📱 QR Code REAL gerado para ${instanceName} - Válido por 20 segundos`);
+    logger.info(`✅ QR Code PNG gerado para ${instanceName}`);
     
     res.json({
-      qrcode: qrCodeDataURL,
+      success: true,
+      qrcode: qrCodeImage,
       instance: instanceName,
-      message: `QR Code REAL gerado para ${instanceName}. Válido por 20 segundos.`,
+      message: `QR Code REAL gerado para ${instanceName}. Escaneie com WhatsApp!`,
       status: 'generated',
-      type: 'real',
-      expires_in: 20,
-      session_id: sessionId,
+      type: 'real_whatsapp',
       instructions: [
         '1. Abra o WhatsApp no seu celular',
         '2. Vá em Configurações > Aparelhos conectados',
         '3. Toque em "Conectar um aparelho"',
-        '4. Escaneie este QR Code RAPIDAMENTE (expira em 20s)',
+        '4. Escaneie este QR Code',
         '5. Aguarde a conexão ser estabelecida'
-      ],
-      warning: 'Este QR Code contém dados reais mas é para demonstração. Para WhatsApp funcionando, use Evolution API oficial.'
+      ]
     });
     
   } catch (error) {
-    console.error('Erro ao gerar QR Code:', error);
-    res.status(500).json({
-      error: 'Erro ao gerar QR Code',
-      message: error.message
-    });
+    logger.error('❌ Erro ao gerar QR Code:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Enviar mensagem texto
-app.post('/message/sendText/:instanceName', (req, res) => {
-  const { instanceName } = req.params;
-  const { number, text } = req.body;
-  
-  if (!number || !text) {
-    return res.status(400).json({
-      error: 'Number e text são obrigatórios'
+// Enviar mensagem REAL
+app.post('/message/sendText/:instanceName', async (req, res) => {
+  try {
+    const { instanceName } = req.params;
+    const { number, text } = req.body;
+    
+    if (!number || !text) {
+      return res.status(400).json({ error: 'number e text são obrigatórios' });
+    }
+    
+    const instance = instances.get(instanceName);
+    
+    if (!instance || !instance.sock || instance.connectionStatus !== 'open') {
+      return res.status(400).json({ 
+        error: 'Instância não conectada ao WhatsApp',
+        status: instance?.connectionStatus || 'not_found'
+      });
+    }
+    
+    // Formatar número
+    let formattedNumber = number.replace(/\D/g, '');
+    if (!formattedNumber.endsWith('@s.whatsapp.net')) {
+      formattedNumber = `${formattedNumber}@s.whatsapp.net`;
+    }
+    
+    // Enviar mensagem REAL
+    const messageInfo = await instance.sock.sendMessage(formattedNumber, { text });
+    
+    logger.info(`✅ Mensagem REAL enviada para ${formattedNumber}: ${text}`);
+    
+    res.json({
+      success: true,
+      message: 'Mensagem enviada com sucesso',
+      data: {
+        id: messageInfo.key.id,
+        number: formattedNumber,
+        text,
+        timestamp: new Date().toISOString()
+      }
     });
+    
+  } catch (error) {
+    logger.error('❌ Erro ao enviar mensagem:', error);
+    res.status(500).json({ error: error.message });
   }
-  
-  // Simular envio de mensagem
-  const message = {
-    id: `msg_${Date.now()}`,
-    instanceName: instanceName,
-    number: number,
-    text: text,
-    status: 'sent',
-    timestamp: new Date().toISOString()
-  };
-  
-  messages.push(message);
-  
-  console.log(`📤 Mensagem enviada: ${instanceName} -> ${number}: ${text}`);
-  
-  res.json({
-    success: true,
-    message: 'Mensagem enviada com sucesso',
-    data: message
-  });
-});
-
-// Listar mensagens
-app.get('/messages/:instanceName', (req, res) => {
-  const { instanceName } = req.params;
-  const instanceMessages = messages.filter(msg => msg.instanceName === instanceName);
-  
-  res.json({
-    instanceName: instanceName,
-    messages: instanceMessages,
-    total: instanceMessages.length
-  });
 });
 
 // Status da instância
 app.get('/instance/status/:instanceName', (req, res) => {
   const { instanceName } = req.params;
-  const instance = instances.find(inst => inst.instanceName === instanceName);
+  const instance = instances.get(instanceName);
   
   if (!instance) {
-    return res.status(404).json({
-      error: 'Instância não encontrada'
-    });
+    return res.status(404).json({ error: 'Instância não encontrada' });
   }
   
   res.json({
-    instanceName: instanceName,
-    status: 'connected',
-    connectionStatus: 'open',
-    qrcode: null
+    instanceName,
+    status: instance.status,
+    connectionStatus: instance.connectionStatus,
+    hasQr: qrCodes.has(instanceName)
   });
 });
 
-// Webhook simulado (receber mensagens)
+// Webhook (receber mensagens)
 app.post('/webhook/:instanceName', (req, res) => {
   const { instanceName } = req.params;
-  const data = req.body;
-  
-  console.log(`📱 Webhook recebido: ${instanceName}`, data);
-  
+  logger.info(`📨 Webhook recebido para ${instanceName}:`, req.body);
   res.json({ status: 'received' });
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok',
-    uptime: process.uptime(),
-    instances: instances.length,
-    messages: messages.length
-  });
+// Error handling
+app.use((error, req, res, next) => {
+  logger.error('❌ Erro na aplicação:', error);
+  res.status(500).json({ error: 'Erro interno do servidor' });
 });
 
-// Start server
+// Iniciar servidor
 app.listen(PORT, () => {
-  console.log(`�� AutoCred Evolution API rodando na porta ${PORT}`);
-  console.log(`📱 WhatsApp API simulado funcionando!`);
-  console.log(`🔗 Endpoints disponíveis:`);
-  console.log(`   GET  /                               - Status da API`);
-  console.log(`   GET  /manager/fetchInstances         - Listar instâncias`);
-  console.log(`   POST /instance/create                - Criar instância`);
-  console.log(`   GET  /instance/qrcode/:name          - Gerar QR Code`);
-  console.log(`   POST /message/sendText/:name         - Enviar mensagem`);
-  console.log(`   GET  /messages/:name                 - Listar mensagens`);
-  console.log(`   GET  /health                         - Health check`);
+  logger.info(`🚀 AutoCred Evolution API REAL rodando na porta ${PORT}`);
+  logger.info(`📱 WhatsApp Version: ${process.env.CONFIG_SESSION_PHONE_VERSION}`);
+  logger.info(`🔗 Endpoints disponíveis:`);
+  logger.info(`   GET  /                               - Status da API`);
+  logger.info(`   GET  /manager/fetchInstances         - Listar instâncias`);
+  logger.info(`   POST /instance/create                - Criar instância`);
+  logger.info(`   GET  /instance/qrcode/:name          - Gerar QR Code REAL`);
+  logger.info(`   POST /message/sendText/:name         - Enviar mensagem REAL`);
+  logger.info(`   GET  /instance/status/:name          - Status da instância`);
+  logger.info(`   GET  /health                         - Health check`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  logger.info('🔌 Fechando servidor...');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('🔌 Fechando servidor...');
+  process.exit(0);
 }); 
