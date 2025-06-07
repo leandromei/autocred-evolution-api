@@ -87,13 +87,84 @@ app.post('/instance/create', (req, res) => {
 app.get('/instance/qrcode/:instanceName', (req, res) => {
   const { instanceName } = req.params;
   
-  // QR Code simulado (base64 de uma imagem pequena)
-  const qrcode = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+  // QR Code simulado mais realista - um QR Code SVG simples
+  const qrcodeSvg = `data:image/svg+xml;base64,${Buffer.from(`
+    <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+      <rect width="200" height="200" fill="white"/>
+      <rect x="10" y="10" width="20" height="20" fill="black"/>
+      <rect x="40" y="10" width="20" height="20" fill="black"/>
+      <rect x="70" y="10" width="20" height="20" fill="black"/>
+      <rect x="100" y="10" width="20" height="20" fill="black"/>
+      <rect x="130" y="10" width="20" height="20" fill="black"/>
+      <rect x="160" y="10" width="20" height="20" fill="black"/>
+      
+      <rect x="10" y="40" width="20" height="20" fill="black"/>
+      <rect x="40" y="40" width="20" height="20" fill="white"/>
+      <rect x="70" y="40" width="20" height="20" fill="black"/>
+      <rect x="100" y="40" width="20" height="20" fill="white"/>
+      <rect x="130" y="40" width="20" height="20" fill="black"/>
+      <rect x="160" y="40" width="20" height="20" fill="black"/>
+      
+      <rect x="10" y="70" width="20" height="20" fill="black"/>
+      <rect x="40" y="70" width="20" height="20" fill="black"/>
+      <rect x="70" y="70" width="20" height="20" fill="white"/>
+      <rect x="100" y="70" width="20" height="20" fill="black"/>
+      <rect x="130" y="70" width="20" height="20" fill="white"/>
+      <rect x="160" y="70" width="20" height="20" fill="black"/>
+      
+      <rect x="10" y="100" width="20" height="20" fill="white"/>
+      <rect x="40" y="100" width="20" height="20" fill="black"/>
+      <rect x="70" y="100" width="20" height="20" fill="black"/>
+      <rect x="100" y="100" width="20" height="20" fill="white"/>
+      <rect x="130" y="100" width="20" height="20" fill="black"/>
+      <rect x="160" y="100" width="20" height="20" fill="white"/>
+      
+      <rect x="10" y="130" width="20" height="20" fill="black"/>
+      <rect x="40" y="130" width="20" height="20" fill="white"/>
+      <rect x="70" y="130" width="20" height="20" fill="black"/>
+      <rect x="100" y="130" width="20" height="20" fill="black"/>
+      <rect x="130" y="130" width="20" height="20" fill="white"/>
+      <rect x="160" y="130" width="20" height="20" fill="black"/>
+      
+      <rect x="10" y="160" width="20" height="20" fill="black"/>
+      <rect x="40" y="160" width="20" height="20" fill="black"/>
+      <rect x="70" y="160" width="20" height="20" fill="black"/>
+      <rect x="100" y="160" width="20" height="20" fill="black"/>
+      <rect x="130" y="160" width="20" height="20" fill="black"/>
+      <rect x="160" y="160" width="20" height="20" fill="black"/>
+      
+      <!-- Canto superior esquerdo -->
+      <rect x="15" y="15" width="50" height="50" fill="white" stroke="black" stroke-width="2"/>
+      <rect x="25" y="25" width="30" height="30" fill="black"/>
+      <rect x="35" y="35" width="10" height="10" fill="white"/>
+      
+      <!-- Canto superior direito -->
+      <rect x="135" y="15" width="50" height="50" fill="white" stroke="black" stroke-width="2"/>
+      <rect x="145" y="25" width="30" height="30" fill="black"/>
+      <rect x="155" y="35" width="10" height="10" fill="white"/>
+      
+      <!-- Canto inferior esquerdo -->
+      <rect x="15" y="135" width="50" height="50" fill="white" stroke="black" stroke-width="2"/>
+      <rect x="25" y="145" width="30" height="30" fill="black"/>
+      <rect x="35" y="155" width="10" height="10" fill="white"/>
+      
+      <text x="100" y="195" font-family="Arial" font-size="8" text-anchor="middle" fill="gray">AutoCred QR Code Simulado</text>
+    </svg>
+  `).toString('base64')}`;
   
   res.json({
-    qrcode: qrcode,
+    qrcode: qrcodeSvg,
     instance: instanceName,
-    message: `QR Code gerado para ${instanceName}. Escaneie com seu WhatsApp.`
+    message: `QR Code gerado para ${instanceName}. Escaneie com seu WhatsApp.`,
+    status: 'generated',
+    type: 'simulation',
+    instructions: [
+      '1. Abra o WhatsApp no seu celular',
+      '2. Vá em Configurações > Aparelhos conectados',
+      '3. Toque em "Conectar um aparelho"',
+      '4. Escaneie este QR Code',
+      '5. Aguarde a conexão ser estabelecida'
+    ]
   });
 });
 
