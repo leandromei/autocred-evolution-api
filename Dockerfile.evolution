@@ -1,20 +1,28 @@
-FROM atendai/evolution-api:v2.1.1
+FROM node:18-alpine
 
-# Configurar usuário e diretórios
-USER root
-RUN mkdir -p /evolution/instances /evolution/store /evolution/db && \
-    chown -R node:node /evolution
+# Instalar dependências básicas
+RUN apk add --no-cache git python3 make g++
 
-# Voltar para usuário node
-USER node
+# Clonar Evolution API
+WORKDIR /app
+RUN git clone https://github.com/EvolutionAPI/evolution-api.git .
+
+# Instalar dependências
+RUN npm install --production
+
+# Criar diretórios necessários
+RUN mkdir -p instances store
+
+# Configuração básica
+ENV NODE_ENV=production
+ENV SERVER_PORT=8080
 
 # Expor porta
 EXPOSE 8080
 
-# Variáveis de ambiente padrão
-ENV NODE_ENV=production
-ENV SERVER_TYPE=http
-ENV SERVER_PORT=8080
+# Health check simples
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:8080/manager/fetchInstances || exit 1
 
 # Comando de inicialização
 CMD ["npm", "start"] 
