@@ -489,4 +489,5 @@ app.listen(PORT, () => {
   logger.info(`🔥 SISTEMA PRONTO PARA APRESENTAR AOS CLIENTES TOP! 🔥`);
   logger.info(`💰 Ready to scale with your TOP 5 promotoras network! 💰`);
 }); / /   F O R C E   C H A N G E   T I M E S T A M P   0 6 / 0 8 / 2 0 2 5   1 6 : 1 3 : 1 3  
+ / /   F O R C E   D E P L O Y   A S C I I   C L E A N  
  
