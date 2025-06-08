@@ -25,18 +25,18 @@ try {
 }
 
 // Simulate WhatsApp like the working local version
-function simulateWhatsAppConnection(instanceName) {
+async function simulateWhatsAppConnection(instanceName) {
     const instance = instances.get(instanceName);
     
     console.log(`[${instanceName}] 🎭 Starting WhatsApp simulation (like local working version)...`);
     
     // Step 1: Generate QR after 2 seconds (like local)
-    setTimeout(() => {
+    setTimeout(async () => {
         if (instances.has(instanceName)) {
             instance.status = 'qr_ready';
             instance.qrGenerated = true;
-            instance.qrCode = generateQRCode(instanceName);
-            console.log(`[${instanceName}] ✅ QR Code ready for scanning`);
+            instance.qrCode = await generateQRCode(instanceName);  // 🔧 FIXED: Added await
+            console.log(`[${instanceName}] ✅ QR Code ready for scanning - Data: ${instance.qrCode?.substring(0, 50)}...`);
         }
     }, 2000);
     
